@@ -1,11 +1,25 @@
 'Deploy tool'
-
 import sys
+import argparse
+
+version = '0.1.0'
 
 
-def main():
+def make_parser():
+    'create parser'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--version', '-V', action='version', version=version)
+    parser.set_defaults(command=lambda options: 1)
+    parser.add_subparsers(title='command')
+
+    return parser
+
+
+def main(args=None):
     'cli tool for deployment tasks'
-    return 0
+    parser = make_parser()
+    options = parser.parse_args(args)
+    return options.command(options)
 
 
 if __name__ == '__main__':
