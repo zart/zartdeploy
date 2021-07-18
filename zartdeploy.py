@@ -5,11 +5,16 @@ import argparse
 version = '0.1.0'
 
 
+def default(options):
+    'No command default'
+    return 1
+
+
 def make_parser():
     'create parser'
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-V', action='version', version=version)
-    parser.set_defaults(command=lambda options: 1)
+    parser.set_defaults(command=default)
     parser.add_subparsers(title='command')
 
     return parser
