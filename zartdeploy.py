@@ -1,8 +1,9 @@
 'Deploy tool'
+from __future__ import print_function
 import os
 import sys
 import argparse
-from subprocess import call
+from subprocess import Popen, PIPE
 
 try:
     from urllib.parse import urlunsplit  # Python 3
@@ -51,18 +52,38 @@ DROP DATABASE [{database}]'''
 # END''')
 
 
+def _quote(args):
+    'quote args for output'
+    return ' '.join('"%s"' % arg if ' ' in arg else arg for arg in args)
+
+
 # TODO: fix logging
-def _run(*args, **kw):
+def _run(*args, verbose=1, expect=0, **kw):
     'execute subprocess'
-    print('EXEC', args)
-    return call(args, **kw)
+    if verbose > 0:
+        print(_quote(args), file=sys.stderr)
+    if verbose > 1:
+        proc = Popen(args)
+    else:
+        proc = Popen(args, stdout=PIPE, stderr=PIPE)
+    out, err = proc.communicate()
+    if kw.get('stdout') is PIPE:
+        proc.stdout.close()
+    if kw.get('stderr') is PIPE:
+        proc.stderr.close()
+    if expect is not None and (proc.returncode != expect):
+        print('FUCK', file=sys.stderr)
+        print('FUCK')
+        raise SystemExit(1)
+    return proc.returncode, out, err
 
 
-def _remove(path):
+def _remove(path, verbose=1):
     'remove file'
     if os.path.exists(path):
         os.unlink(path)
-        print('UNLINKED', path)
+        if verbose > 0:
+            print('del ' + _quote(path))
 
 
 # TODO: some auto-magic?
@@ -86,7 +107,9 @@ def localdb(options):
     uses LocalDB's sqllocaldb utility to create/drop instances
     requries sqlcmd tool to execute queries
     """
+    rc = 0
     opts = vars(options)
+    verbose = opts['verbose']
     server = '(localdb)\\' + options.instance
     is_sysdb = options.database.lower() in LOCALDB_SYSTEM_DATABASES
     path = os.path.abspath(options.path) if options.path else None
@@ -119,7 +142,15 @@ def localdb(options):
     if options.action in ('create', 'full-create', 'drop', 'full-drop'):
         if not is_sysdb:  # can't drop system databases
             query = LOCALDB_DROP_DATABASE.format(**opts)
-            _run('sqlcmd', '-S', server, '-Q', query)
+            _run(
+                'sqlcmd',
+                '-S',
+                server,
+                '-Q',
+                query,
+                expect=None,
+                verbose=verbose,
+            )
 
             # if storing db in specific place, clear old files
             if path:
@@ -134,31 +165,52 @@ def localdb(options):
 
     # on full- commands, kill instance completely
     if options.action in ('full-create', 'full-drop'):
-        _run('sqllocaldb', 'stop', options.instance, '-i')
-        _run('sqllocaldb', 'delete', options.instance)
+        _run(
+            'sqllocaldb',
+            'stop',
+            options.instance,
+            '-i',
+            expect=None,
+            verbose=verbose,
+        )
+        _run(
+            'sqllocaldb',
+            'delete',
+            options.instance,
+            expect=None,
+            verbose=verbose,
+        )
 
     # on full- commands, create new instance
-    # TODO: SQLLocalDB seems buggy in creating default instance with version
     if options.action in ('full-create', 'only-create'):
         args = ['sqllocaldb', 'create', options.instance, '-s']
         if options.version:
             args.insert(-1, options.version)
-        _run(*args)
+        rc, out, err = _run(*args, verbose=verbose)
 
     if options.action in ('create', 'full-create', 'only-create'):
         if not is_sysdb:
             query = (
                 LOCALDB_CREATE_DATABASE_ON if path else LOCALDB_CREATE_DATABASE
             )
-            _run('sqlcmd', '-S', server, '-Q', query.format(**opts))
-    return 0
+            rc, out, err = _run(
+                'sqlcmd',
+                '-S',
+                server,
+                '-Q',
+                query.format(**opts),
+                verbose=verbose,
+            )
+    return rc
 
 
 def make_parser():
     'create parser'
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-V', action='version', version=version)
-    parser.set_defaults(command=default)
+    parser.add_argument('-v', dest='verbose', action='count')
+    parser.add_argument('-q', dest='verbose', action='store_const', const=0)
+    parser.set_defaults(command=default, verbose=1)
     subparsers = parser.add_subparsers(title='command')
     p = subparsers.add_parser('localdb', help='sqllocaldb wrapper')
     p.add_argument(
