@@ -58,7 +58,7 @@ def _quote(args):
 
 
 # TODO: fix logging
-def _run(*args, verbose=1, expect=0, **kw):
+def _run(*args, verbose=1, expect=None, **kw):
     'execute subprocess'
     if verbose > 0:
         print(_quote(args), file=sys.stderr)
@@ -72,8 +72,10 @@ def _run(*args, verbose=1, expect=0, **kw):
     if kw.get('stderr') is PIPE:
         proc.stderr.close()
     if expect is not None and (proc.returncode != expect):
-        print('FUCK', file=sys.stderr)
-        print('FUCK')
+        print('ERROR: Expected %r, got %r' % (expect, proc.returncode))
+        if verbose == 1:
+            print(out)
+            print(err)
         raise SystemExit(1)
     return proc.returncode, out, err
 
@@ -142,15 +144,7 @@ def localdb(options):
     if options.action in ('create', 'full-create', 'drop', 'full-drop'):
         if not is_sysdb:  # can't drop system databases
             query = LOCALDB_DROP_DATABASE.format(**opts)
-            _run(
-                'sqlcmd',
-                '-S',
-                server,
-                '-Q',
-                query,
-                expect=None,
-                verbose=verbose,
-            )
+            _run('sqlcmd', '-S', server, '-Q', query, verbose=verbose)
 
             # if storing db in specific place, clear old files
             if path:
@@ -166,19 +160,10 @@ def localdb(options):
     # on full- commands, kill instance completely
     if options.action in ('full-create', 'full-drop'):
         _run(
-            'sqllocaldb',
-            'stop',
-            options.instance,
-            '-i',
-            expect=None,
-            verbose=verbose,
+            'sqllocaldb', 'stop', options.instance, '-i', verbose=verbose,
         )
         _run(
-            'sqllocaldb',
-            'delete',
-            options.instance,
-            expect=None,
-            verbose=verbose,
+            'sqllocaldb', 'delete', options.instance, verbose=verbose,
         )
 
     # on full- commands, create new instance
@@ -186,7 +171,7 @@ def localdb(options):
         args = ['sqllocaldb', 'create', options.instance, '-s']
         if options.version:
             args.insert(-1, options.version)
-        rc, out, err = _run(*args, verbose=verbose)
+        rc, out, err = _run(*args, verbose=verbose, expect=0)
 
     if options.action in ('create', 'full-create', 'only-create'):
         if not is_sysdb:
@@ -200,6 +185,7 @@ def localdb(options):
                 '-Q',
                 query.format(**opts),
                 verbose=verbose,
+                expect=0
             )
     return rc
 
