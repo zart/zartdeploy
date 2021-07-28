@@ -62,22 +62,25 @@ def _run(*args, verbose=1, expect=None, **kw):
     'execute subprocess'
     if verbose > 0:
         print(_quote(args), file=sys.stderr)
-    if verbose > 1:
-        proc = Popen(args)
-    else:
-        proc = Popen(args, stdout=PIPE, stderr=PIPE)
+    proc = Popen(args, stdout=PIPE, stderr=PIPE)
     out, err = proc.communicate()
+    if verbose > 1:
+        getattr(sys.stderr, 'buffer', sys.stderr).write(out)
+        getattr(sys.stderr, 'buffer', sys.stderr).write(err)
     if kw.get('stdout') is PIPE:
         proc.stdout.close()
     if kw.get('stderr') is PIPE:
         proc.stderr.close()
-    if expect is not None and (proc.returncode != expect):
-        print('ERROR: Expected %r, got %r' % (expect, proc.returncode))
-        if verbose == 1:
-            print(out)
-            print(err)
-        raise SystemExit(1)
-    return proc.returncode, out, err
+    # FIXME: re-write this logic completely
+    rc = proc.returncode  # b'error' not in err or proc.returncode
+    # if expect is not None and (proc.returncode != expect or rc is True):
+    #     print('ERROR: Expected %r, got %r' % (expect, proc.returncode))
+    #     if verbose == 1:
+    #         getattr(sys.stderr, 'buffer', sys.stderr).write(out)
+    #         getattr(sys.stderr, 'buffer', sys.stderr).write(err)
+    #     raise SystemExit(1)
+    # try to detect error in execution by output
+    return rc, out, err
 
 
 def _remove(path, verbose=1):
@@ -103,6 +106,7 @@ def default(options):
 # TODO: support running initial scripts
 # TODO: check return values
 # TODO: filter output via custom logging
+# FIXME: sqllocaldb returns exit code 0 regardless of errors. check stderr?
 def localdb(options):
     """sqllocaldb wrapper to re-create database instances easily
 
@@ -185,7 +189,7 @@ def localdb(options):
                 '-Q',
                 query.format(**opts),
                 verbose=verbose,
-                expect=0
+                expect=0,
             )
     return rc
 
