@@ -190,14 +190,30 @@ def localdb(options):
     return rc
 
 
+def iisexpress(options):
+    'iisexpress wrapper for running debug server'
+    iisexpress_exe = os.path.expandvars(
+        r'%ProgramFiles%\IIS Express\iisexpress.exe'
+    )
+    _run(iisexpress_exe, verbose=2)
+    return 0
+
+
 def make_parser():
     'create parser'
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', '-V', action='version', version=version)
-    parser.add_argument('-v', dest='verbose', action='count')
-    parser.add_argument('-q', dest='verbose', action='store_const', const=0)
+    parser.add_argument(
+        '-v', dest='verbose', action='count', help='increase verbosity'
+    )
+    parser.add_argument(
+        '-q', dest='verbose', action='store_const', const=0, help='quiet',
+    )
     parser.set_defaults(command=default, verbose=1)
+
     subparsers = parser.add_subparsers(title='command')
+
+    # localdb
     p = subparsers.add_parser('localdb', help='sqllocaldb wrapper')
     p.add_argument(
         'action',
@@ -232,6 +248,10 @@ def make_parser():
         help='SQL version to use when creating instance [%(default)s]',
     )
     p.set_defaults(command=localdb)
+
+    # iisexpress
+    p = subparsers.add_parser('iisexpress', help='iisexpress wrapper')
+    p.set_defaults(command=iisexpress)
 
     return parser
 
