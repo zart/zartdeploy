@@ -58,8 +58,10 @@ def _quote(args):
 
 
 # TODO: fix logging
-def _run(*args, verbose=1, expect=None, **kw):
+def _run(*args, **kw):
     'execute subprocess'
+    verbose = kw.pop('verbose', 1)
+    # expect = kw.pop('expect', None)
     if verbose > 0:
         print(_quote(args), file=sys.stderr)
     proc = Popen(args, stdout=PIPE, stderr=PIPE)
@@ -181,15 +183,9 @@ def localdb(options):
         if not is_sysdb:
             query = (
                 LOCALDB_CREATE_DATABASE_ON if path else LOCALDB_CREATE_DATABASE
-            )
+            ).format(**opts)
             rc, out, err = _run(
-                'sqlcmd',
-                '-S',
-                server,
-                '-Q',
-                query.format(**opts),
-                verbose=verbose,
-                expect=0,
+                'sqlcmd', '-S', server, '-Q', query, verbose=verbose, expect=0,
             )
     return rc
 
